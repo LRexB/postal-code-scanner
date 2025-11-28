@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Output files
+results.json
+output.log
+*.html
+
+# Input data (optional - uncomment if you don't want to commit the CSV)
+# CiviCRM_Contact_Search.csv
+# PostalCodesFound.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug files
+debug.js
+test_*.js
+
