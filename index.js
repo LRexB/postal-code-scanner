@@ -58,6 +58,25 @@ function extractStreetNumber(fullAddress, streetName) {
   return firstNumber ? firstNumber[1] : '';
 }
 
+// Helper to format phone numbers as (xxx) yyy-zzzz when possible
+function formatPhone(phoneRaw) {
+  if (!phoneRaw) return '';
+  const digits = String(phoneRaw).replace(/\D/g, '');
+  // Remove leading country code '1' for NANP numbers
+  let d = digits;
+  if (d.length === 11 && d.startsWith('1')) {
+    d = d.slice(1);
+  }
+  if (d.length === 10) {
+    const area = d.slice(0, 3);
+    const prefix = d.slice(3, 6);
+    const line = d.slice(6);
+    return `(${area}) ${prefix}-${line}`;
+  }
+  // If not 10 digits, return original trimmed input
+  return String(phoneRaw).trim();
+}
+
 // Function to query Elections Canada by full address with dropdown form
 async function queryByAddress(streetAddress, city, postalCode, province = 'ON') {
   try {
@@ -312,7 +331,7 @@ async function processCSV() {
               displayName: row['Display Name'] || '',
               streetAddress: row['Street Address'] || '',
               city: row['City'] || '',
-              phone: row['Phone'] || '',
+              phone: formatPhone(row['Phone'] || ''),
               postalCode: postalCode.trim(),
               originalRow: row
             });
