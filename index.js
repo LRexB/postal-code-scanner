@@ -10,23 +10,23 @@ const ELECTIONS_URL = 'https://www.elections.ca/scripts/vis/FindED';
 // Helper function to find best match in dropdown options
 function findBestMatch(options, searchText) {
   if (!searchText || !options || options.length === 0) return null;
-  
+
   const search = searchText.toLowerCase().trim();
-  
+
   // Try exact match first
   for (const opt of options) {
     if (opt.text.toLowerCase() === search) {
       return opt;
     }
   }
-  
+
   // Try case-insensitive contains
   for (const opt of options) {
     if (opt.text.toLowerCase().includes(search) || search.includes(opt.text.toLowerCase())) {
       return opt;
     }
   }
-  
+
   // Try partial match (first significant word)
   const searchWords = search.split(/\s+/).filter(w => w.length > 2);
   for (const word of searchWords) {
@@ -36,23 +36,23 @@ function findBestMatch(options, searchText) {
       }
     }
   }
-  
+
   return null;
 }
 
 // Helper function to extract street number from address
 function extractStreetNumber(fullAddress, streetName) {
   if (!fullAddress) return '';
-  
+
   // Remove the street name portion to isolate the number
   const beforeStreet = fullAddress.split(streetName)[0];
-  
+
   // Extract numbers, handling formats like "107-280", "280", "107 - 280", etc.
   const numberMatch = beforeStreet.match(/(\d+[\s-]*\d*)/);
   if (numberMatch) {
     return numberMatch[1].trim();
   }
-  
+
   // Fallback: just grab first number sequence
   const firstNumber = fullAddress.match(/^\s*(\d+)/);
   return firstNumber ? firstNumber[1] : '';
@@ -81,10 +81,10 @@ function formatPhone(phoneRaw) {
 async function queryByAddress(streetAddress, city, postalCode, province = 'ON') {
   try {
     console.log(`   🔄 Trying address lookup: ${streetAddress}, ${city}`);
-    
+
     // First, get the form page with postal code to get dropdown options
     const formUrl = `${ELECTIONS_URL}?L=e&PAGEID=20&PC=${encodeURIComponent(postalCode.replace(/\s+/g, ''))}`;
-    
+
     const formResponse = await axios.get(formUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -93,16 +93,16 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
 
     const $ = cheerio.load(formResponse.data);
     const bodyText = $('body').text();
-    
+
     // Check if this page requires address details (has dropdowns)
-    if (!bodyText.includes('We will need your address') && 
-        !bodyText.includes('Entering incomplete address information')) {
+    if (!bodyText.includes('We will need your address') &&
+      !bodyText.includes('Entering incomplete address information')) {
       console.log(`   ⚠️  Form doesn't require address details`);
       return null;
     }
-    
+
     console.log(`   📋 Found address form, parsing dropdowns...`);
-    
+
     // Parse city dropdown options
     const cityOptions = [];
     $('select[name="CITY"] option, select[name="city"] option').each((i, elem) => {
@@ -112,7 +112,7 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
         cityOptions.push({ value, text });
       }
     });
-    
+
     // Parse street name dropdown options  
     const streetOptions = [];
     $('select[name="ST"] option, select[name="st"] option, select[name="STREET"] option').each((i, elem) => {
@@ -122,32 +122,32 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
         streetOptions.push({ value, text });
       }
     });
-    
+
     console.log(`   📊 Found ${cityOptions.length} city options, ${streetOptions.length} street options`);
-    
+
     if (cityOptions.length === 0 || streetOptions.length === 0) {
       console.log(`   ⚠️  No dropdown options found`);
       return null;
     }
-    
+
     // Find best matches
     const selectedCity = findBestMatch(cityOptions, city);
     const selectedStreet = findBestMatch(streetOptions, streetAddress);
-    
+
     if (!selectedCity || !selectedStreet) {
       console.log(`   ⚠️  Could not match city or street in dropdowns`);
       console.log(`      City match: ${selectedCity ? selectedCity.text : 'none'}`);
       console.log(`      Street match: ${selectedStreet ? selectedStreet.text : 'none'}`);
       return null;
     }
-    
+
     console.log(`   ✓ Matched city: "${selectedCity.text}"`);
     console.log(`   ✓ Matched street: "${selectedStreet.text}"`);
-    
+
     // Extract street number
     const streetNumber = extractStreetNumber(streetAddress, selectedStreet.text);
     console.log(`   ✓ Street number: "${streetNumber}"`);
-    
+
     // Submit the form with selected values
     const submitUrl = ELECTIONS_URL;
     const formData = {
@@ -159,8 +159,8 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
       STN: streetNumber,
       PROV: province
     };
-    
-    const submitResponse = await axios.post(submitUrl, 
+
+    const submitResponse = await axios.post(submitUrl,
       new URLSearchParams(formData).toString(),
       {
         headers: {
@@ -173,17 +173,17 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
     // Parse the result
     const $result = cheerio.load(submitResponse.data);
     const h2Text = $result('h2').first().text().trim();
-    
+
     // Valid electoral districts typically have a dash and province in parentheses
-    if (h2Text && 
-        h2Text.length > 3 && 
-        h2Text !== 'Find your electoral district' &&
-        h2Text !== 'Am I registered to vote?' &&
-        (h2Text.includes('--') || h2Text.includes('(Ontario)') || h2Text.includes('(Quebec)'))) {
+    if (h2Text &&
+      h2Text.length > 3 &&
+      h2Text !== 'Find your electoral district' &&
+      h2Text !== 'Am I registered to vote?' &&
+      (h2Text.includes('--') || h2Text.includes('(Ontario)') || h2Text.includes('(Quebec)'))) {
       console.log(`   ✅ Address lookup successful: ${h2Text}`);
       return h2Text;
     }
-    
+
     console.log(`   ⚠️  Address lookup did not return valid district (got: "${h2Text}")`);
     return null;
   } catch (error) {
@@ -196,10 +196,10 @@ async function queryByAddress(streetAddress, city, postalCode, province = 'ON') 
 async function queryPostalCode(postalCode, streetAddress = '', city = '') {
   try {
     console.log(`\n📍 Querying postal code: ${postalCode}`);
-    
+
     // Construct the GET request URL with query parameters
     const url = `${ELECTIONS_URL}?L=e&PAGEID=20&PC=${encodeURIComponent(postalCode)}`;
-    
+
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -208,7 +208,7 @@ async function queryPostalCode(postalCode, streetAddress = '', city = '') {
 
     // Parse the HTML response
     const $ = cheerio.load(response.data);
-    
+
     // Extract electoral district information
     const results = {
       postalCode: postalCode,
@@ -228,11 +228,11 @@ async function queryPostalCode(postalCode, streetAddress = '', city = '') {
     // Check if the page contains the error message about needing full address
     const bodyText = $('body').text();
     const needsAddress = bodyText.includes('We will need your address to find your electoral district') ||
-                         bodyText.includes('Entering incomplete address information may lead to errors');
-    
+      bodyText.includes('Entering incomplete address information may lead to errors');
+
     // If postal code lookup failed and we have address info, try address lookup
-    if ((needsAddress || !results.electoralDistrict || results.electoralDistrict === 'Find your electoral district') 
-        && streetAddress && city) {
+    if ((needsAddress || !results.electoralDistrict || results.electoralDistrict === 'Find your electoral district')
+      && streetAddress && city) {
       console.log(`   ⚠️  Postal code lookup incomplete - trying address lookup`);
       const addressResult = await queryByAddress(streetAddress, city, postalCode);
       if (addressResult) {
@@ -295,7 +295,7 @@ async function queryPostalCode(postalCode, streetAddress = '', city = '') {
     if (results.party) {
       console.log(`   Party: ${results.party}`);
     }
-    
+
     if (!results.electoralDistrict || results.electoralDistrict === 'Find your electoral district') {
       console.log('   ⚠️  No electoral district information found');
     }
@@ -308,6 +308,86 @@ async function queryPostalCode(postalCode, streetAddress = '', city = '') {
       postalCode: postalCode,
       error: error.message
     };
+  }
+}
+
+// Function to query OpenNorth Represent API for both provincial and federal districts
+// Returns { provincialDistrict, federalDistrict } so federal can be used as fallback
+async function queryOpenNorth(postalCode) {
+  try {
+    const pc = postalCode.replace(/\s+/g, '').toUpperCase();
+    console.log(`   🏛️  Querying OpenNorth API for: ${pc}`);
+
+    const url = `https://represent.opennorth.ca/postcodes/${pc}/?format=json`;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+
+    const data = response.data;
+    if (!data) return { provincialDistrict: '', federalDistrict: '' };
+
+    // Combine both boundary arrays — concordance is more accurate (uses actual boundary
+    // geometry), centroid is a fallback (uses postal code centroid point)
+    const allBoundaries = [
+      ...(data.boundaries_concordance || []),
+      ...(data.boundaries_centroid || [])
+    ];
+
+    const province = (data.province === 'ON') ? 'Ontario' : (data.province === 'QC') ? 'Quebec' : data.province;
+
+    // --- Provincial riding ---
+    let provincialDistrict = '';
+    const provincialSets = [
+      'ontario-electoral-districts-representation-act-2015',
+      'ontario-electoral-districts-representation-act-2005',
+      'quebec-electoral-districts-2017',
+      'quebec-electoral-districts-2011'
+    ];
+    for (const setSlug of provincialSets) {
+      const match = allBoundaries.find(b => b.url && b.url.includes(setSlug));
+      if (match && match.name) {
+        provincialDistrict = `${match.name} (${province})`;
+        break;
+      }
+    }
+    if (!provincialDistrict) {
+      const fallback = allBoundaries.find(b =>
+        b.boundary_set_name && (
+          b.boundary_set_name.includes('Ontario electoral district') ||
+          b.boundary_set_name.includes('Quebec electoral district')
+        )
+      );
+      if (fallback && fallback.name) {
+        provincialDistrict = `${fallback.name} (${province})`;
+      }
+    }
+
+    // --- Federal riding (2023 representation order preferred) ---
+    let federalDistrict = '';
+    const federalSets = [
+      'federal-electoral-districts-2023-representation-order',
+      'federal-electoral-districts-2013-representation-order',
+      'federal-electoral-districts'
+    ];
+    for (const setSlug of federalSets) {
+      const match = allBoundaries.find(b => b.url && b.url.includes(setSlug));
+      if (match && match.name) {
+        federalDistrict = `${match.name} (${province})`;
+        break;
+      }
+    }
+
+    if (provincialDistrict) console.log(`   🏛️  Provincial riding: ${provincialDistrict}`);
+    else console.log(`   ⚠️  No provincial riding found`);
+    if (federalDistrict) console.log(`   🏛️  Federal (OpenNorth): ${federalDistrict}`);
+
+    return { provincialDistrict, federalDistrict };
+  } catch (error) {
+    console.error(`   ❌ Error querying OpenNorth API:`, error.message);
+    return { provincialDistrict: '', federalDistrict: '' };
   }
 }
 
@@ -325,21 +405,22 @@ async function processCSV() {
       .on('data', (row) => {
         // Store the entire row data along with postal code
         const postalCode = row['Postal Code'];
-        
+
         if (postalCode && postalCode.trim()) {
           rowsData.push({
-              displayName: row['Display Name'] || '',
-              streetAddress: row['Street Address'] || '',
-              city: row['City'] || '',
-              phone: formatPhone(row['Phone'] || ''),
-              postalCode: postalCode.trim(),
-              originalRow: row
-            });
+            displayName: row['Display Name'] || '',
+            streetAddress: row['Street Address'] || '',
+            city: row['City'] || '',
+            phone: formatPhone(row['Phone'] || ''),
+            email: row['Email'] || '',
+            postalCode: postalCode.trim(),
+            originalRow: row
+          });
         }
       })
       .on('end', async () => {
         console.log(`✅ Found ${rowsData.length} postal codes in CSV\n`);
-        console.log('=' .repeat(60));
+        console.log('='.repeat(60));
 
         // Query each postal code
         for (let i = 0; i < rowsData.length; i++) {
@@ -347,47 +428,59 @@ async function processCSV() {
           // Remove spaces from postal code for the query
           const postalCodeNoSpaces = rowData.postalCode.replace(/\s+/g, '');
           const result = await queryPostalCode(
-            postalCodeNoSpaces, 
-            rowData.streetAddress, 
+            postalCodeNoSpaces,
+            rowData.streetAddress,
             rowData.city
           );
-          
+
+          // Query OpenNorth API for provincial riding + federal fallback
+          await new Promise(r => setTimeout(r, 500)); // polite delay between APIs
+          const openNorth = await queryOpenNorth(postalCodeNoSpaces);
+
           // Combine original row data with electoral district
-          // Filter out invalid district names
+          // Filter out invalid district names from Elections Canada
           let district = '';
-          if (result.electoralDistrict && 
-              result.electoralDistrict !== 'Find your electoral district' &&
-              result.electoralDistrict !== 'Am I registered to vote?' &&
-              !result.electoralDistrict.match(/^K\d[A-Z]/)) { // Not a postal code
+          if (result.electoralDistrict &&
+            result.electoralDistrict !== 'Find your electoral district' &&
+            result.electoralDistrict !== 'Am I registered to vote?' &&
+            !result.electoralDistrict.match(/^K\d[A-Z]/)) { // Not a postal code
             district = result.electoralDistrict;
           }
-          
+
+          // Use OpenNorth federal district as fallback when Elections Canada fails
+          if (!district && openNorth.federalDistrict) {
+            district = openNorth.federalDistrict;
+            console.log(`   🔄 Using OpenNorth fallback for federal district: ${district}`);
+          }
+
           results.push({
             displayName: rowData.displayName,
             streetAddress: rowData.streetAddress,
             city: rowData.city,
             phone: rowData.phone || '',
+            email: rowData.email || '',
             postalCode: rowData.postalCode,
-            electoralDistrict: district
+            electoralDistrict: district,
+            provincialDistrict: openNorth.provincialDistrict
           });
-          
+
           // Add a small delay between requests to be polite
           if (i < rowsData.length - 1) {
             await new Promise(r => setTimeout(r, 1000));
           }
         }
 
-        console.log('\n' + '=' .repeat(60));
+        console.log('\n' + '='.repeat(60));
         console.log(`\n✅ Completed processing ${results.length} postal codes`);
-        
+
         // Save results to JSON file
         const jsonOutputFile = 'results.json';
         fs.writeFileSync(jsonOutputFile, JSON.stringify(results, null, 2));
         console.log(`💾 Full results saved to ${jsonOutputFile}`);
-        
+
         // Save results to CSV file
         const csvOutputFile = 'PostalCodesFound.csv';
-        const csvHeader = '"Display Name","Street Address","City","Phone","Postal Code","Electoral District"\n';
+        const csvHeader = '"Display Name","Street Address","City","Phone","Email","Postal Code","Electoral District","Provincial Electoral District"\n';
         const csvRows = results.map(r => {
           const escapeCsv = (str) => {
             if (!str) return '""';
@@ -402,21 +495,23 @@ async function processCSV() {
             escapeCsv(r.streetAddress),
             escapeCsv(r.city),
             escapeCsv(r.phone),
+            escapeCsv(r.email),
             escapeCsv(r.postalCode),
-            escapeCsv(r.electoralDistrict)
+            escapeCsv(r.electoralDistrict),
+            escapeCsv(r.provincialDistrict)
           ].join(',');
         }).join('\n');
-        
+
         fs.writeFileSync(csvOutputFile, csvHeader + csvRows);
         console.log(`📊 CSV output saved to ${csvOutputFile}`);
-        
+
         // Print summary
         const withDistricts = results.filter(r => r.electoralDistrict && r.electoralDistrict !== '');
         console.log(`\n📈 Summary:`);
         console.log(`   Total records: ${results.length}`);
         console.log(`   Electoral districts found: ${withDistricts.length}`);
         console.log(`   No district found: ${results.length - withDistricts.length}`);
-        
+
         resolve(results);
       })
       .on('error', (error) => {
@@ -439,5 +534,5 @@ if (require.main === module) {
     });
 }
 
-module.exports = { processCSV, queryPostalCode, queryByAddress };
+module.exports = { processCSV, queryPostalCode, queryByAddress, queryOpenNorth };
 
