@@ -332,6 +332,7 @@ async function processCSV() {
               streetAddress: row['Street Address'] || '',
               city: row['City'] || '',
               phone: formatPhone(row['Phone'] || ''),
+              email: row['Email'] || '',
               postalCode: postalCode.trim(),
               originalRow: row
             });
@@ -367,6 +368,7 @@ async function processCSV() {
             streetAddress: rowData.streetAddress,
             city: rowData.city,
             phone: rowData.phone || '',
+            email: rowData.email || '',
             postalCode: rowData.postalCode,
             electoralDistrict: district
           });
@@ -387,7 +389,7 @@ async function processCSV() {
         
         // Save results to CSV file
         const csvOutputFile = 'PostalCodesFound.csv';
-        const csvHeader = '"Display Name","Street Address","City","Phone","Postal Code","Electoral District"\n';
+        const csvHeader = '"Display Name","Street Address","City","Phone","Email","Postal Code","Electoral District"\n';
         const csvRows = results.map(r => {
           const escapeCsv = (str) => {
             if (!str) return '""';
@@ -402,6 +404,7 @@ async function processCSV() {
             escapeCsv(r.streetAddress),
             escapeCsv(r.city),
             escapeCsv(r.phone),
+            escapeCsv(r.email),
             escapeCsv(r.postalCode),
             escapeCsv(r.electoralDistrict)
           ].join(',');
